@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -358,26 +359,38 @@ func printBanner() {
 }
 // ================= END BANNER =================
 
+type ListFormatter struct{}
+
+func (f *ListFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	timestamp := entry.Time.Format("15:04:05")
+	level := strings.ToUpper(entry.Level.String())
+
+	// Format Header Log: [JAM] LEVEL: Pesan
+	// Menggunakan ANSI color sederhana (Cyan untuk Level)
+	msg := fmt.Sprintf("\033[90m[%s]\033[0m \033[36m%s\033[0m: %s\n", timestamp, level, entry.Message)
+
+	// Sortir keys agar urutan informasi tidak berubah-ubah
+	keys := make([]string, 0, len(entry.Data))
+	for k := range entry.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// List data menurun kebawah
+	for _, k := range keys {
+		msg += fmt.Sprintf("  \033[94m└─\033[0m %-18s : %v\n", k, entry.Data[k])
+	}
+
+	return []byte(msg + "\n"), nil
+}
+
 func main() {
 	printBanner()
 	fmt.Println("=====+CYBERNETIC WOLF+=====")
 	fmt.Println()
 
-	// ✅ FIX: Ganti JSON formatter ke TextFormatter untuk output human-readable + colored
 	log := logrus.New()
-	log.SetFormatter(&logrus.TextFormatter{
-		ForceColors:      true,       // Warna tetap muncul meski output di-pipe
-		DisableColors:    false,      // Aktifkan warna ANSI untuk terminal
-		FullTimestamp:    true,       // Tampilkan timestamp lengkap
-		TimestampFormat:  "15:04:05", // Format jam:menit:detik (ringkas)
-		PadLevelText:     true,       // Ratakan teks level [INFO], [ERROR], dll
-		QuoteEmptyFields: true,       // Quote field kosong agar jelas
-		FieldMap: logrus.FieldMap{    // Custom nama field agar lebih rapi
-			logrus.FieldKeyTime:  "⏰",
-			logrus.FieldKeyLevel: "📊",
-			logrus.FieldKeyMsg:   "💬",
-		},
-	})
+	log.SetFormatter(&ListFormatter{})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(logrus.InfoLevel)
 
